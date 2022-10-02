@@ -1,5 +1,8 @@
 #include <wx/wx.h>
 
+wxDECLARE_EVENT(wxEVT_SORTINGTHREAD_COMPLETED, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_SORTINGTHREAD_UPDATED, wxThreadEvent);
+
 class SortingThreadCallback
 {
 public:

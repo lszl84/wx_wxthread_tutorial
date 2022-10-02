@@ -36,6 +36,9 @@ private:
     void DoBackgroundWork() override;
     void OnThreadDestruction() override;
 
+    void OnThreadUpdate(wxThreadEvent &);
+    void OnThreadCompletion(wxThreadEvent &);
+
     void OnButtonClick(wxCommandEvent &e);
     void OnClose(wxCloseEvent &e);
 
@@ -94,6 +97,9 @@ MyFrame::MyFrame(const wxString &title, const wxPoint &pos, const wxSize &size)
         RefreshTimerId);
 
     this->refreshTimer->Start(150);
+
+    this->Bind(wxEVT_SORTINGTHREAD_UPDATED, &MyFrame::OnThreadUpdate, this);
+    this->Bind(wxEVT_SORTINGTHREAD_COMPLETED, &MyFrame::OnThreadCompletion, this);
 }
 
 void MyFrame::OnButtonClick(wxCommandEvent &e)
@@ -107,12 +113,17 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
         if (this->backgroundThread->Run() != wxTHREAD_NO_ERROR)
         {
             this->SetStatusText("Could not create thread.");
-            this->Layout();
 
             delete this->backgroundThread;
 
             this->processing = false;
         }
+        else
+        {
+            this->SetStatusText(wxString::Format("Sorting the array of %zu elements...", this->sharedData.size()));
+        }
+
+        this->Layout();
     }
 }
 
@@ -159,28 +170,21 @@ void MyFrame::OnThreadDestruction()
 void MyFrame::BackgroundTask()
 {
     int n = sharedData.size();
-    wxGetApp().CallAfter([this, n]()
-                         {
-                                     this->SetStatusText(wxString::Format("Sorting the array of %d elements...", n));
-                                     this->Layout(); });
+    wxEvtHandler *threadEventHandler = this;
 
     auto start = std::chrono::steady_clock::now();
 
     for (int i = 0; i < n - 1; i++)
     {
-        wxGetApp().CallAfter([this, n, i]()
-                             { this->progressBar->SetValue(i * this->progressBar->GetRange() / (n - 2)); });
+        wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_UPDATED);
+        e->SetPayload<double>(static_cast<double>(i) / static_cast<double>(n - 2));
+        wxQueueEvent(threadEventHandler, e);
 
         if (wxThread::This()->TestDestroy())
         {
-            wxGetApp().CallAfter([this]()
-                                 {
-                                             this->processing = false;
-                                             if (this->quitRequested) 
-                                             {
-                                                this->quitRequested = false;
-                                                this->Destroy();
-                                             } });
+            wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_COMPLETED);
+            e->SetString("Processing aborted.");
+            wxQueueEvent(threadEventHandler, e);
             return;
         }
 
@@ -197,11 +201,28 @@ void MyFrame::BackgroundTask()
     auto end = std::chrono::steady_clock::now();
     auto diff = end - start;
 
-    wxGetApp().CallAfter([this, diff]()
-                         {
-                                     auto frontValue = sharedData.front();
-                                     this->SetStatusText(wxString::Format("The first number is: %f. Processing time: %.2f [ms]", frontValue, std::chrono::duration<double, std::milli>(diff).count()));
-                                     this->Layout();
+    auto frontValue = sharedData.front();
 
-                                     this->processing = false; });
+    wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_COMPLETED);
+    e->SetString(wxString::Format("The first number is: %f. Processing time: %.2f [ms]", frontValue, std::chrono::duration<double, std::milli>(diff).count()));
+    wxQueueEvent(threadEventHandler, e);
+}
+
+void MyFrame::OnThreadUpdate(wxThreadEvent &e)
+{
+    double progressFraction = e.GetPayload<double>();
+    this->progressBar->SetValue(progressFraction * this->progressBar->GetRange());
+}
+
+void MyFrame::OnThreadCompletion(wxThreadEvent &e)
+{
+    this->SetStatusText(e.GetString());
+    this->Layout();
+
+    this->processing = false;
+    if (this->quitRequested)
+    {
+        this->quitRequested = false;
+        this->Destroy();
+    }
 }
