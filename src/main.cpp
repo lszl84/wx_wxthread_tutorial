@@ -25,7 +25,6 @@ private:
     VisualGrid *grid;
 
     bool processing{false};
-    std::atomic<bool> quitRequested{false};
 
     std::vector<float> sharedData;
     wxCriticalSection dataCs;
@@ -127,18 +126,14 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
 void MyFrame::OnClose(wxCloseEvent &e)
 {
     this->refreshTimer->Stop();
-    wxCriticalSectionLocker lock(threadCs);
-    if (this->backgroundThread)
     {
-        e.Veto();
-
-        this->quitRequested = true;
-        this->backgroundThread->Delete();
+        wxCriticalSectionLocker lock(threadCs);
+        if (this->backgroundThread)
+        {
+            this->backgroundThread->Delete();
+        }
     }
-    else
-    {
-        this->Destroy();
-    }
+    this->Destroy();
 }
 
 void MyFrame::RandomizeSharedData()
@@ -174,9 +169,4 @@ void MyFrame::OnThreadCompletion(wxThreadEvent &e)
     delete this->backgroundThread;
 
     this->processing = false;
-    if (this->quitRequested)
-    {
-        this->quitRequested = false;
-        this->Destroy();
-    }
 }
