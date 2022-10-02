@@ -14,7 +14,7 @@ set(wxWidgets_USE_STATIC 1)
 
 find_package(wxWidgets REQUIRED)
 
-set(SRCS main.cpp visualgrid.cpp)
+set(SRCS main.cpp visualgrid.cpp sortingthread.cpp)
 
 include(${wxWidgets_USE_FILE})
 

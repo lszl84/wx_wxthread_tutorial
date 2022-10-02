@@ -2,11 +2,11 @@
 #include <chrono>
 #include <atomic>
 #include <mutex>
-#include <thread>
 
 #include <random>
 
 #include "visualgrid.h"
+#include "sortingthread.h"
 
 class MyApp : public wxApp
 {
@@ -14,7 +14,7 @@ public:
     virtual bool OnInit();
 };
 
-class MyFrame : public wxFrame
+class MyFrame : public wxFrame, public SortingThreadCallback
 {
 public:
     MyFrame(const wxString &title, const wxPoint &pos, const wxSize &size);
@@ -32,7 +32,8 @@ private:
     std::vector<float> sharedData;
     std::mutex dataMutex;
 
-    std::thread backgroundThread;
+    SortingThread *backgroundThread;
+    void DoBackgroundWork() override;
 
     void OnButtonClick(wxCommandEvent &e);
     void OnClose(wxCloseEvent &e);
@@ -100,8 +101,17 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
     {
         this->processing = true;
 
-        this->backgroundThread = std::thread{&MyFrame::BackgroundTask, this};
-        this->backgroundThread.detach();
+        this->backgroundThread = new SortingThread(this);
+
+        if (this->backgroundThread->Run() != wxTHREAD_NO_ERROR)
+        {
+            this->SetStatusText("Could not create thread.");
+            this->Layout();
+
+            delete this->backgroundThread;
+
+            this->processing = false;
+        }
     }
 }
 
@@ -130,6 +140,11 @@ void MyFrame::RandomizeSharedData()
     {
         sharedData[i] = distr(gen);
     }
+}
+
+void MyFrame::DoBackgroundWork()
+{
+    this->BackgroundTask();
 }
 
 void MyFrame::BackgroundTask()
