@@ -31,8 +31,10 @@ private:
     std::vector<float> sharedData;
     wxCriticalSection dataCs;
 
-    SortingThread *backgroundThread;
+    SortingThread *backgroundThread{};
+    wxCriticalSection threadCs;
     void DoBackgroundWork() override;
+    void OnThreadDestruction() override;
 
     void OnButtonClick(wxCommandEvent &e);
     void OnClose(wxCloseEvent &e);
@@ -117,7 +119,8 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
 void MyFrame::OnClose(wxCloseEvent &e)
 {
     this->refreshTimer->Stop();
-    if (this->processing)
+    wxCriticalSectionLocker lock(threadCs);
+    if (this->backgroundThread)
     {
         e.Veto();
 
@@ -145,6 +148,12 @@ void MyFrame::RandomizeSharedData()
 void MyFrame::DoBackgroundWork()
 {
     this->BackgroundTask();
+}
+
+void MyFrame::OnThreadDestruction()
+{
+    wxCriticalSectionLocker lock(threadCs);
+    this->backgroundThread = nullptr;
 }
 
 void MyFrame::BackgroundTask()
