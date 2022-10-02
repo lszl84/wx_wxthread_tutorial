@@ -2,7 +2,7 @@
 #include <wx/graphics.h>
 #include <wx/dcbuffer.h>
 
-VisualGrid::VisualGrid(wxWindow *parent, wxWindowID id, const wxPoint &pos, const wxSize &size, int xSquaresCount, std::vector<float> &v, std::mutex &m) : wxWindow(parent, id, pos, size, wxFULL_REPAINT_ON_RESIZE), xSquaresCount(xSquaresCount), values(v), valuesMutex(m)
+VisualGrid::VisualGrid(wxWindow *parent, wxWindowID id, const wxPoint &pos, const wxSize &size, int xSquaresCount, std::vector<float> &v, wxCriticalSection &cs) : wxWindow(parent, id, pos, size, wxFULL_REPAINT_ON_RESIZE), xSquaresCount(xSquaresCount), values(v), valuesCs(cs)
 {
     this->SetBackgroundStyle(wxBG_STYLE_PAINT);
     this->Bind(wxEVT_PAINT, &VisualGrid::OnPaint, this);
@@ -17,7 +17,7 @@ void VisualGrid::OnPaint(wxPaintEvent &evt)
     {
         float squareWidth = static_cast<float>(this->GetSize().GetWidth()) / xSquaresCount;
 
-        std::lock_guard g(valuesMutex);
+        wxCriticalSectionLocker lock(valuesCs);
         for (int i = 0; i < values.size(); i++)
         {
             int colorIntensity = values[i] * 255.0;

@@ -1,7 +1,6 @@
 #include <wx/wx.h>
 #include <chrono>
 #include <atomic>
-#include <mutex>
 
 #include <random>
 
@@ -30,7 +29,7 @@ private:
     std::atomic<bool> quitRequested{false};
 
     std::vector<float> sharedData;
-    std::mutex dataMutex;
+    wxCriticalSection dataCs;
 
     SortingThread *backgroundThread;
     void DoBackgroundWork() override;
@@ -73,7 +72,7 @@ MyFrame::MyFrame(const wxString &title, const wxPoint &pos, const wxSize &size)
     panelSizer->Add(button, 0, wxALIGN_CENTER | wxRIGHT, this->FromDIP(5));
     panelSizer->Add(progressBar, 0, wxALIGN_CENTER);
 
-    grid = new VisualGrid(this, wxID_ANY, wxDefaultPosition, this->FromDIP(wxSize(1000, 800)), 250, sharedData, dataMutex);
+    grid = new VisualGrid(this, wxID_ANY, wxDefaultPosition, this->FromDIP(wxSize(1000, 800)), 250, sharedData, dataCs);
 
     panel->SetSizer(panelSizer);
 
@@ -176,7 +175,7 @@ void MyFrame::BackgroundTask()
             return;
         }
 
-        std::lock_guard g(dataMutex);
+        wxCriticalSectionLocker lock(dataCs);
         for (int j = 0; j < n - i - 1; j++)
         {
             if (sharedData[j] > sharedData[j + 1])
