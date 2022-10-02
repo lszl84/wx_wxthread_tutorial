@@ -123,6 +123,7 @@ void MyFrame::OnClose(wxCloseEvent &e)
         e.Veto();
 
         this->quitRequested = true;
+        this->backgroundThread->Delete();
     }
     else
     {
@@ -162,13 +163,16 @@ void MyFrame::BackgroundTask()
         wxGetApp().CallAfter([this, n, i]()
                              { this->progressBar->SetValue(i * this->progressBar->GetRange() / (n - 2)); });
 
-        if (this->quitRequested)
+        if (wxThread::This()->TestDestroy())
         {
             wxGetApp().CallAfter([this]()
                                  {
                                              this->processing = false;
-                                             this->quitRequested = false;
-                                             this->Destroy(); });
+                                             if (this->quitRequested) 
+                                             {
+                                                this->quitRequested = false;
+                                                this->Destroy();
+                                             } });
             return;
         }
 
