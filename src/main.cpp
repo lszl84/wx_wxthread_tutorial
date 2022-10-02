@@ -1,5 +1,4 @@
 #include <wx/wx.h>
-#include <chrono>
 #include <atomic>
 
 #include <random>

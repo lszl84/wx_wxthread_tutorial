@@ -1,4 +1,5 @@
 #include "sortingthread.h"
+#include <chrono>
 
 wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_COMPLETED, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_UPDATED, wxThreadEvent);
