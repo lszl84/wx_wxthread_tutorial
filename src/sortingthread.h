@@ -13,7 +13,7 @@ public:
 class SortingThread : public wxThread
 {
 public:
-    SortingThread(SortingThreadCallback *callback, wxEvtHandler *handler, std::vector<float> &data, wxCriticalSection &cs) : callback(callback), threadEventHandler(handler), sharedData(data), dataCs(cs) {}
+    SortingThread(SortingThreadCallback *callback, wxEvtHandler *handler, std::vector<float> &data, wxCriticalSection &cs) : wxThread(wxTHREAD_JOINABLE), callback(callback), threadEventHandler(handler), sharedData(data), dataCs(cs) {}
     virtual ~SortingThread() { this->callback->OnThreadDestruction(); }
 
 protected:

@@ -170,6 +170,9 @@ void MyFrame::OnThreadCompletion(wxThreadEvent &e)
     this->SetStatusText(e.GetString());
     this->Layout();
 
+    this->backgroundThread->Wait();
+    delete this->backgroundThread;
+
     this->processing = false;
     if (this->quitRequested)
     {
