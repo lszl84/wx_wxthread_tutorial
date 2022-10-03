@@ -35,6 +35,7 @@ private:
 
     void OnThreadUpdate(wxThreadEvent &);
     void OnThreadCompletion(wxThreadEvent &);
+    void OnThreadCancel(wxThreadEvent &);
 
     void OnButtonClick(wxCommandEvent &e);
     void OnClose(wxCloseEvent &e);
@@ -96,6 +97,7 @@ MyFrame::MyFrame(const wxString &title, const wxPoint &pos, const wxSize &size)
 
     this->Bind(wxEVT_SORTINGTHREAD_UPDATED, &MyFrame::OnThreadUpdate, this);
     this->Bind(wxEVT_SORTINGTHREAD_COMPLETED, &MyFrame::OnThreadCompletion, this);
+    this->Bind(wxEVT_SORTINGTHREAD_CANCELLED, &MyFrame::OnThreadCancel, this);
 }
 
 void MyFrame::OnButtonClick(wxCommandEvent &e)
@@ -131,6 +133,7 @@ void MyFrame::OnClose(wxCloseEvent &e)
         if (this->backgroundThread)
         {
             this->backgroundThread->Delete();
+            delete this->backgroundThread;
         }
     }
     this->Destroy();
@@ -167,6 +170,14 @@ void MyFrame::OnThreadCompletion(wxThreadEvent &e)
 
     this->backgroundThread->Wait();
     delete this->backgroundThread;
+
+    this->processing = false;
+}
+
+void MyFrame::OnThreadCancel(wxThreadEvent &e)
+{
+    this->SetStatusText(e.GetString());
+    this->Layout();
 
     this->processing = false;
 }

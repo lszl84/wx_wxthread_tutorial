@@ -2,6 +2,7 @@
 #include <chrono>
 
 wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_COMPLETED, wxThreadEvent);
+wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_CANCELLED, wxThreadEvent);
 wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_UPDATED, wxThreadEvent);
 
 wxThread::ExitCode SortingThread::Entry()
@@ -18,7 +19,7 @@ wxThread::ExitCode SortingThread::Entry()
 
         if (wxThread::This()->TestDestroy())
         {
-            wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_COMPLETED);
+            wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_CANCELLED);
             e->SetString("Processing aborted.");
             wxQueueEvent(threadEventHandler, e);
             return nullptr;
