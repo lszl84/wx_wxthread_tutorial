@@ -1,10 +1,9 @@
 #include <wx/wx.h>
 #include <atomic>
-
+#include <chrono>
 #include <random>
 
 #include "visualgrid.h"
-#include "sortingthread.h"
 
 class MyApp : public wxApp
 {
@@ -12,7 +11,11 @@ public:
     virtual bool OnInit();
 };
 
-class MyFrame : public wxFrame, public SortingThreadCallback
+wxDECLARE_EVENT(wxEVT_SORTINGTHREAD_COMPLETED, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_SORTINGTHREAD_CANCELLED, wxThreadEvent);
+wxDECLARE_EVENT(wxEVT_SORTINGTHREAD_UPDATED, wxThreadEvent);
+
+class MyFrame : public wxFrame, public wxThreadHelper
 {
 public:
     MyFrame(const wxString &title, const wxPoint &pos, const wxSize &size);
@@ -29,9 +32,7 @@ private:
     std::vector<float> sharedData;
     wxCriticalSection dataCs;
 
-    SortingThread *backgroundThread{};
-    wxCriticalSection threadCs;
-    void OnThreadDestruction() override;
+    virtual wxThread::ExitCode Entry();
 
     void OnThreadUpdate(wxThreadEvent &);
     void OnThreadCompletion(wxThreadEvent &);
@@ -45,6 +46,10 @@ private:
     wxTimer *refreshTimer;
     static constexpr int RefreshTimerId = 6612;
 };
+
+wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_COMPLETED, wxThreadEvent);
+wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_CANCELLED, wxThreadEvent);
+wxDEFINE_EVENT(wxEVT_SORTINGTHREAD_UPDATED, wxThreadEvent);
 
 wxIMPLEMENT_APP(MyApp);
 
@@ -106,13 +111,10 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
     {
         this->processing = true;
 
-        this->backgroundThread = new SortingThread(this, this, sharedData, dataCs);
-
-        if (this->backgroundThread->Run() != wxTHREAD_NO_ERROR)
+        if (CreateThread(wxTHREAD_JOINABLE) != wxTHREAD_NO_ERROR ||
+            GetThread()->Run() != wxTHREAD_NO_ERROR)
         {
             this->SetStatusText("Could not create thread.");
-
-            delete this->backgroundThread;
 
             this->processing = false;
         }
@@ -125,17 +127,57 @@ void MyFrame::OnButtonClick(wxCommandEvent &e)
     }
 }
 
+wxThread::ExitCode MyFrame::Entry()
+{
+    int n = sharedData.size();
+
+    auto start = std::chrono::steady_clock::now();
+
+    for (int i = 0; i < n - 1; i++)
+    {
+        wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_UPDATED);
+        e->SetPayload<double>(static_cast<double>(i) / static_cast<double>(n - 2));
+        wxQueueEvent(this, e);
+
+        if (wxThread::This()->TestDestroy())
+        {
+            wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_CANCELLED);
+            e->SetString("Processing aborted.");
+            wxQueueEvent(this, e);
+            return nullptr;
+        }
+
+        wxCriticalSectionLocker lock(dataCs);
+        for (int j = 0; j < n - i - 1; j++)
+        {
+            if (sharedData[j] > sharedData[j + 1])
+            {
+                std::swap(sharedData[j], sharedData[j + 1]);
+            }
+        }
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    auto diff = end - start;
+
+    auto frontValue = sharedData.front();
+
+    wxThreadEvent *e = new wxThreadEvent(wxEVT_SORTINGTHREAD_COMPLETED);
+    e->SetString(wxString::Format("The first number is: %f. Processing time: %.2f [ms]", frontValue, std::chrono::duration<double, std::milli>(diff).count()));
+    wxQueueEvent(this, e);
+
+    return nullptr;
+}
+
 void MyFrame::OnClose(wxCloseEvent &e)
 {
     this->refreshTimer->Stop();
+
+    if (GetThread() && GetThread()->IsRunning())
     {
-        wxCriticalSectionLocker lock(threadCs);
-        if (this->backgroundThread)
-        {
-            this->backgroundThread->Delete();
-            delete this->backgroundThread;
-        }
+        GetThread()->Delete();
     }
+
     this->Destroy();
 }
 
@@ -151,12 +193,6 @@ void MyFrame::RandomizeSharedData()
     }
 }
 
-void MyFrame::OnThreadDestruction()
-{
-    wxCriticalSectionLocker lock(threadCs);
-    this->backgroundThread = nullptr;
-}
-
 void MyFrame::OnThreadUpdate(wxThreadEvent &e)
 {
     double progressFraction = e.GetPayload<double>();
@@ -168,8 +204,7 @@ void MyFrame::OnThreadCompletion(wxThreadEvent &e)
     this->SetStatusText(e.GetString());
     this->Layout();
 
-    this->backgroundThread->Wait();
-    delete this->backgroundThread;
+    GetThread()->Wait();
 
     this->processing = false;
 }
